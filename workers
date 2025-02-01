@@ -1,0 +1,55 @@
+addEventListener('fetch', event => {
+  event.respondWith(handleRequest(event.request));
+});
+
+async function handleRequest(request) {
+  const url = new URL(request.url);
+  const pathname = url.pathname;
+
+  // 如果请求的路径是根路径 '/' 或 '/index.html'，返回一个简单的 HTML 响应
+  if (pathname === '/' || pathname === '/index.html') {
+    return new Response('Proxy is Running! Details: https://github.com/tech-shrimp/deno-api-proxy', {
+      status: 200,
+      headers: { 'Content-Type': 'text/html' }
+    });
+  }
+
+  // 构造目标 URL，假设路径部分就是目标服务器的域名
+  const targetUrl = `https://${pathname}`;
+
+  try {
+    // 创建一个新的 Headers 对象，用于存储请求头
+    const headers = new Headers();
+    // 定义允许的请求头字段
+    const allowedHeaders = ['accept', 'content-type', 'authorization'];
+    // 遍历原始请求的头部，只将允许的头部字段复制到新的 Headers 对象中
+    for (const [key, value] of request.headers.entries()) {
+      if (allowedHeaders.includes(key.toLowerCase())) {
+        headers.set(key, value);
+      }
+    }
+
+    // 使用 fetch 函数向目标 URL 发起请求
+    const response = await fetch(targetUrl, {
+      method: request.method, // 使用原始请求的 HTTP 方法（如 GET、POST 等）
+      headers: headers, // 使用新的 Headers 对象
+      body: request.body // 使用原始请求的 body
+    });
+
+    // 创建一个新的 Headers 对象，用于存储响应头
+    const responseHeaders = new Headers(response.headers);
+    // 设置 Referrer-Policy 响应头为 'no-referrer'，防止泄露来源信息
+    responseHeaders.set('Referrer-Policy', 'no-referrer');
+
+    // 返回一个新的 Response 对象，包含目标服务器的响应体和状态码
+    return new Response(response.body, {
+      status: response.status, // 使用目标服务器的 HTTP 状态码
+      headers: responseHeaders // 使用新的响应头
+    });
+
+  } catch (error) {
+    // 如果在请求过程中发生错误，捕获错误并返回一个 500 内部服务器错误的响应
+    console.error('Failed to fetch:', error);
+    return new Response('Internal Server Error', { status: 500 });
+  }
+}
